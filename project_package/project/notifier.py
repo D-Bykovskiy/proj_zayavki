@@ -1,0 +1,95 @@
+"""??????????? ? ????????? ?????? ? Telegram."""
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime
+from typing import Dict, List, Optional
+from urllib import parse, request
+
+from . import config, database
+
+LOGGER = logging.getLogger(__name__)
+TELEGRAM_API_URL = "https://api.telegram.org"
+
+# <<< ???????? ?????: ???? ??? ??????/????, ????????? ??????????, ? ?? ???????????? >>>
+
+
+def _format_delay_message(row: Dict[str, str]) -> str:
+    updated_at = row.get("status_updated_at", "")
+    try:
+        dt = datetime.fromisoformat(updated_at)
+        timestamp = dt.strftime("%Y.%m.%d %H:%M")
+    except ValueError:
+        timestamp = updated_at
+
+    request_number = row.get("request_number", "?")
+    position_number = row.get("position_number") or "-"
+    status = row.get("status", "??????????")
+
+    message_template = (
+        "????????! ?????? ?{req} (??????? {pos}) ????? ??? ??????????.\n"
+        "??????? ??????: {status}.\n"
+        "????????? ?????????: {ts}."
+    )
+    return ''.join(message_template).format(
+        req=request_number,
+        pos=position_number,
+        status=status,
+        ts=timestamp,
+    )
+
+
+def send_message(text: str, token: Optional[str] = None, chat_id: Optional[str] = None) -> bool:
+    """?????????? ????????? ? Telegram ??? ????? ? ???, ???? ??? ??????."""
+    token = token or config.TELEGRAM_TOKEN
+    chat_id = chat_id or config.TELEGRAM_CHAT_ID
+
+    if not token or not chat_id:
+        LOGGER.info("[FAKE TELEGRAM] %s", text)
+        return False
+
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "disable_web_page_preview": True,
+    }
+    data = parse.urlencode(payload).encode()
+    url = f"{TELEGRAM_API_URL}/bot{token}/sendMessage"
+
+    try:
+        with request.urlopen(url, data=data, timeout=10) as response:
+            body = response.read().decode(errors="ignore")
+            if response.getcode() != 200:
+                LOGGER.error("Telegram API error: %s", body)
+                return False
+            result = json.loads(body or "{}")
+            success = result.get("ok", True)
+            if not success:
+                LOGGER.error("Telegram returned failure: %s", result)
+            return success
+    except Exception as exc:  # pragma: no cover - ???? ????? ???? ??????????
+        LOGGER.exception("Failed to send Telegram message: %s", exc)
+        return False
+
+
+def notify_delays(minutes: int = 60, send: bool = True) -> List[str]:
+    """????????? ???????? ? ?????????? ?????????."""
+    delayed = database.get_delayed_requests(minutes)
+    notifications: List[str] = []
+
+    for row in delayed:
+        message = _format_delay_message(row)
+        notifications.append(message)
+        if send:
+            send_message(message)
+        else:
+            LOGGER.info("[DRY RUN] %s", message)
+
+    if not delayed:
+        LOGGER.debug("??? ?????? ? ?????????? ?????? %s ?????", minutes)
+
+    return notifications
+
+
+__all__ = ["notify_delays", "send_message"]

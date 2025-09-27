@@ -247,6 +247,29 @@ def update_comment(
         raise
 
 
+
+
+def get_delayed_requests(minutes: int = 60) -> List[Dict[str, Any]]:
+    """?????????? ?????? ??? ?????????? ??????? ?????? ?????????? ???????."""
+    query = (
+        "SELECT id, request_number, position_number, comment, comment_author, "
+        "status, created_at, status_updated_at "
+        "FROM requests "
+        "WHERE status != ? "
+        "AND (julianday('now') - julianday(status_updated_at)) * 24 * 60 >= ? "
+        "ORDER BY datetime(status_updated_at) ASC"
+    )
+    parameters: List[Any] = ["????????? ????", float(minutes)]
+
+    try:
+        with _connect() as conn:
+            cursor = conn.execute(query, parameters)
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    except sqlite3.Error as exc:
+        LOGGER.exception("Failed to fetch delayed requests: %s", exc)
+        raise
+
 def get_requests(limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Возвращает список заявок, отсортированный по времени обновления статуса."""
     query = (
@@ -275,6 +298,7 @@ __all__ = [
     "DEFAULT_STATUS",
     "ROBOT_AUTHOR",
     "add_request",
+    "get_delayed_requests",
     "get_requests",
     "init_db",
     "update_comment",
