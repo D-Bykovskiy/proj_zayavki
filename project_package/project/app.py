@@ -2,14 +2,29 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
+from datetime import datetime
 from typing import Dict, List
 
 from flask import Flask, flash, redirect, render_template, request, url_for
-import sqlite3
+from markupsafe import Markup
 
 from . import database
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _format_timestamp(value: str | None) -> Markup:
+    """Вернуть дату в формате YYYY.MM.DD и время HH:MM с переносом строки."""
+    if not value:
+        return Markup("—")
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        LOGGER.warning("Cannot parse timestamp: %s", value)
+        return Markup(value)
+    return Markup(f"{dt:%Y.%m.%d}<br>{dt:%H:%M}")
+
 
 def create_app() -> Flask:
     """Создать и настроить экземпляр Flask-приложения."""
@@ -19,6 +34,7 @@ def create_app() -> Flask:
     logging.basicConfig(level=logging.INFO)
 
     database.init_db()
+    app.jinja_env.filters["format_ts"] = _format_timestamp
 
     @app.route("/")
     def index() -> str:
@@ -46,14 +62,20 @@ def create_app() -> Flask:
         form = request.form
         request_number = form.get("request_number", "").strip()
         position_number = form.get("position_number", "").strip()
+        comment_author = form.get("comment_author", "").strip()
         comment = form.get("comment", "").strip()
 
-        if not request_number or not position_number:
-            flash("Номер заявки и номер позиции обязательны", "error")
+        if not (request_number and position_number and comment_author):
+            flash("Номер заявки, номер позиции и автор комментария обязательны", "error")
             return redirect(url_for("new_request"))
 
         try:
-            database.add_request(request_number, position_number, comment)
+            database.add_request(
+                request_number=request_number,
+                position_number=position_number,
+                comment=comment,
+                comment_author=comment_author,
+            )
             flash("Заявка успешно создана", "success")
         except sqlite3.IntegrityError:
             flash("Такая заявка уже существует", "error")
@@ -63,6 +85,7 @@ def create_app() -> Flask:
         return redirect(url_for("list_requests"))
 
     return app
+
 
 app = create_app()
 

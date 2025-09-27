@@ -12,9 +12,11 @@
                     <th>ID</th>
                     <th>Номер заявки</th>
                     <th>Номер позиции</th>
+                    <th>Автор комментария</th>
                     <th>Комментарий</th>
                     <th>Статус</th>
-                    <th>Обновлено</th>
+                    <th>Создана</th>
+                    <th>Обновлена</th>
                 </tr>
             </thead>
             <tbody>
@@ -23,9 +25,11 @@
                     <td>{{ item.id }}</td>
                     <td>{{ item.request_number }}</td>
                     <td>{{ item.position_number }}</td>
+                    <td>{{ item.comment_author or "—" }}</td>
                     <td>{{ item.comment or "—" }}</td>
                     <td>{{ item.status }}</td>
-                    <td>{{ item.status_updated_at }}</td>
+                    <td class="timestamp">{{ item.created_at | format_ts }}</td>
+                    <td class="timestamp">{{ item.status_updated_at | format_ts }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -1,4 +1,4 @@
-﻿"""Слой доступа к базе данных для управления заявками подрядчиков."""
+﻿"""Слой работы с базой данных для управления заявками подрядчика."""
 from __future__ import annotations
 
 import logging
@@ -10,22 +10,38 @@ from typing import Any, Dict, Iterator, List, Optional
 from .config import DB_FILE
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_STATUS = "\u0437\u0430\u044f\u0432\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0430"
+DEFAULT_STATUS = "заявка отправлена"
 
 
 def _ensure_db_dir() -> None:
-    """Убедиться, что каталог для файла базы данных существует."""
+    """Создаёт каталог для файла базы данных, если он отсутствует."""
     DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _utc_now() -> str:
-    """Вернуть текущий момент времени в формате ISO без микросекунд."""
+    """Возвращает текущий момент времени в ISO-формате без микросекунд."""
     return datetime.utcnow().replace(microsecond=0).isoformat()
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Добавляет недостающие столбцы в таблицу заявок."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(requests)")}
+
+    if "comment_author" not in columns:
+        conn.execute("ALTER TABLE requests ADD COLUMN comment_author TEXT")
+
+    if "created_at" not in columns:
+        conn.execute("ALTER TABLE requests ADD COLUMN created_at TEXT")
+        now = _utc_now()
+        conn.execute(
+            "UPDATE requests SET created_at = COALESCE(created_at, status_updated_at, ?)",
+            (now,),
+        )
 
 
 @contextmanager
 def _connect() -> Iterator[sqlite3.Connection]:
-    """Возвращать соединение SQLite с включённой фабрикой строк."""
+    """Возвращает соединение SQLite с включённой фабрикой строк."""
     _ensure_db_dir()
     connection = sqlite3.connect(DB_FILE)
     connection.row_factory = sqlite3.Row
@@ -41,10 +57,10 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    """Создать таблицу заявок и необходимые индексы, если их нет."""
+    """Создаёт таблицу заявок, индексы и выполняет миграции схемы."""
     try:
         with _connect() as conn:
-            # SQL: создаём таблицу для хранения заявок и данных о статусах.
+            # SQL: создаём таблицу для хранения заявок и связанных метаданных.
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS requests (
@@ -52,50 +68,59 @@ def init_db() -> None:
                     request_number TEXT NOT NULL,
                     position_number TEXT NOT NULL,
                     comment TEXT,
+                    comment_author TEXT,
                     status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
                     status_updated_at TEXT NOT NULL,
                     UNIQUE(request_number, position_number)
                 )
                 """
             )
-            # SQL: индекс ускоряет выборки по времени обновления статуса.
+            # SQL: индекс ускоряет выборки по времени последнего обновления.
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_requests_status_updated_at
                 ON requests(status_updated_at)
                 """
             )
+            _ensure_schema(conn)
     except sqlite3.Error as exc:
         LOGGER.exception("Failed to initialize database schema at %s: %s", DB_FILE, exc)
         raise
 
 
-def add_request(request_number: str, position_number: str, comment: str) -> int:
-    """Добавить новую заявку подрядчика в базу данных.
-
-    Args:
-        request_number: Идентификатор из внутренней системы.
-        position_number: Привязанный номер позиции или оборудования.
-        comment: Дополнительные сведения от инженера.
-
-    Returns:
-        Первичный ключ созданной записи.
-    """
+def add_request(
+    request_number: str,
+    position_number: str,
+    comment: str,
+    comment_author: str,
+) -> int:
+    """Добавляет новую заявку подрядчика и возвращает её идентификатор."""
     timestamp = _utc_now()
     try:
         with _connect() as conn:
-            # SQL: записываем новую заявку с базовым статусом.
+            # SQL: вставляем заявку с автором и временными метками.
             cursor = conn.execute(
                 """
                 INSERT INTO requests (
                     request_number,
                     position_number,
                     comment,
+                    comment_author,
                     status,
+                    created_at,
                     status_updated_at
-                ) VALUES (?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (request_number, position_number, comment, DEFAULT_STATUS, timestamp),
+                (
+                    request_number,
+                    position_number,
+                    comment,
+                    comment_author,
+                    DEFAULT_STATUS,
+                    timestamp,
+                    timestamp,
+                ),
             )
             request_id = int(cursor.lastrowid)
             LOGGER.info(
@@ -128,16 +153,7 @@ def update_status(
     new_status: str,
     position_number: Optional[str] = None,
 ) -> bool:
-    """Обновить статус существующей заявки.
-
-    Args:
-        request_number: Идентификатор, связывающий письмо и заявку.
-        new_status: Статус, полученный из коммуникаций подрядчика.
-        position_number: Необязательный дополнительный идентификатор для уточнения.
-
-    Returns:
-        True, если обновлена хотя бы одна запись, иначе False.
-    """
+    """Обновляет статус существующей заявки."""
     timestamp = _utc_now()
     parameters: List[Any] = [new_status, timestamp, request_number]
     where_clause = "request_number = ?"
@@ -183,9 +199,10 @@ def update_status(
 
 
 def get_requests(limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Получить список заявок, упорядоченный по времени обновления статуса."""
+    """Возвращает список заявок, отсортированный по времени обновления статуса."""
     query = (
-        "SELECT id, request_number, position_number, comment, status, status_updated_at "
+        "SELECT id, request_number, position_number, comment, comment_author, "
+        "status, created_at, status_updated_at "
         "FROM requests ORDER BY datetime(status_updated_at) DESC"
     )
     parameters: List[Any] = []
@@ -196,7 +213,7 @@ def get_requests(limit: Optional[int] = None) -> List[Dict[str, Any]]:
 
     try:
         with _connect() as conn:
-            # SQL: выбираем последние обновлённые заявки для отображения.
+            # SQL: загружаем заявки, наиболее актуальные по времени обновления.
             cursor = conn.execute(query, parameters)
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
