@@ -1,0 +1,19 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h2>Новая заявка</h2>
+    <form action="{{ url_for('add_request') }}" method="post">
+        <label for="request_number">Номер заявки *</label>
+        <input id="request_number" name="request_number" required>
+
+        <label for="position_number">Номер позиции *</label>
+        <input id="position_number" name="position_number" required>
+
+        <label for="comment">Комментарий</label>
+        <textarea id="comment" name="comment" rows="3"></textarea>
+
+        <button type="submit">Создать</button>
+    </form>
+</section>
+{% endblock %}

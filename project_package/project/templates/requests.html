@@ -1,0 +1,35 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h2>Список заявок</h2>
+    {% if not requests %}
+        <p>Пока нет ни одной заявки.</p>
+    {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Номер заявки</th>
+                    <th>Номер позиции</th>
+                    <th>Комментарий</th>
+                    <th>Статус</th>
+                    <th>Обновлено</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in requests %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td>{{ item.request_number }}</td>
+                    <td>{{ item.position_number }}</td>
+                    <td>{{ item.comment or "—" }}</td>
+                    <td>{{ item.status }}</td>
+                    <td>{{ item.status_updated_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+# Python virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# SQLite databases
+*.sqlite3
+*.db
+
+# Local archives
+project_package.zip
+
+# Flask instance folders
+instance/
+
+# IDE
+*.pyproj
+*.suo
+*.vsp
+*.vspscc
+.idea/
+.vscode/
