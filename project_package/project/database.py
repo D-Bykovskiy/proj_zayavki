@@ -11,6 +11,7 @@ from .config import DB_FILE
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_STATUS = "заявка отправлена"
+ROBOT_AUTHOR = "Робот"
 
 
 def _ensure_db_dir() -> None:
@@ -76,7 +77,7 @@ def init_db() -> None:
                 )
                 """
             )
-            # SQL: индекс ускоряет выборки по времени последнего обновления.
+            # SQL: индекс ускоряет выборки по времени последнего обновления статуса.
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_requests_status_updated_at
@@ -198,6 +199,54 @@ def update_status(
         raise
 
 
+def update_comment(
+    request_number: str,
+    comment: str,
+    position_number: Optional[str] = None,
+    author: str = ROBOT_AUTHOR,
+) -> bool:
+    """Обновляет комментарий и автора заявки."""
+    parameters: List[Any] = [comment, author, request_number]
+    where_clause = "request_number = ?"
+
+    if position_number is not None:
+        where_clause += " AND position_number = ?"
+        parameters.append(position_number)
+
+    sql = (
+        "UPDATE requests SET comment = ?, comment_author = ? "
+        f"WHERE {where_clause}"
+    )
+
+    try:
+        with _connect() as conn:
+            # SQL: записываем комментарий и автора.
+            cursor = conn.execute(sql, parameters)
+            updated = cursor.rowcount > 0
+
+        if updated:
+            LOGGER.info(
+                "Updated comment for request %s%s",
+                request_number,
+                f"/{position_number}" if position_number else "",
+            )
+        else:
+            LOGGER.warning(
+                "No request found for %s%s when saving comment",
+                request_number,
+                f"/{position_number}" if position_number else "",
+            )
+        return updated
+    except sqlite3.Error as exc:
+        LOGGER.exception(
+            "Failed to update comment for %s%s: %s",
+            request_number,
+            f"/{position_number}" if position_number else "",
+            exc,
+        )
+        raise
+
+
 def get_requests(limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Возвращает список заявок, отсортированный по времени обновления статуса."""
     query = (
@@ -224,8 +273,10 @@ def get_requests(limit: Optional[int] = None) -> List[Dict[str, Any]]:
 
 __all__ = [
     "DEFAULT_STATUS",
+    "ROBOT_AUTHOR",
     "add_request",
     "get_requests",
     "init_db",
+    "update_comment",
     "update_status",
 ]
