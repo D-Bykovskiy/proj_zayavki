@@ -1,6 +1,7 @@
 ﻿"""Обработчик писем подрядчика из Outlook."""
 from __future__ import annotations
 
+import argparse
 import logging
 import re
 from dataclasses import dataclass
@@ -108,7 +109,6 @@ def fetch_contractor_messages(use_fake: bool = True) -> Iterable[ContractorMessa
             )
         return
 
-    # TODO: заменить на интеграцию с Outlook через exchangelib.
     LOGGER.warning("Режим обращения к реальной почте ещё не реализован")
     return []
 
@@ -162,8 +162,43 @@ def process_mailbox(use_fake: bool = True) -> List[str]:
     return results
 
 
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Командный интерфейс для одиночного запуска обработки почты."""
+    parser = argparse.ArgumentParser(
+        description="Обновляет статусы заявок на основе писем подрядчика.",
+    )
+    parser.add_argument(
+        "--fake",
+        action="store_true",
+        help="использовать встроенные тестовые письма вместо подключения к Outlook",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="уровень логирования (по умолчанию INFO)",
+    )
+    args = parser.parse_args(argv)
+
+    logging.basicConfig(level=getattr(logging, args.log_level))
+
+    results = process_mailbox(use_fake=args.fake)
+    if not results:
+        print("Новых писем подрядчика не найдено.")
+        return 0
+
+    for line in results:
+        print(line)
+    return 0
+
+
 __all__ = [
     "ContractorMessage",
-    "process_mailbox",
     "fetch_contractor_messages",
+    "main",
+    "process_mailbox",
 ]
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI обёртка
+    raise SystemExit(main())

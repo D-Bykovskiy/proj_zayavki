@@ -31,11 +31,11 @@
   - Анализирует письма, приводит данные к `ContractorMessage`.
   - Для каждой записи вызывает `database.update_status()` и `database.update_comment()`.
   - Не обращается к Telegram напрямую; только пишет в БД.
+  - Имеет CLI `python -m project_package.project.mail_checker`, который запускается по расписанию.
 - `project_package/project/notifier.py`
   - Вызывает `database.get_delayed_requests()` и преобразует словари заявок в текстовые уведомления.
   - Доставляет уведомления в Telegram при наличии токена и chat_id.
-- *(планируется)* `project_package/project/scheduler.py`
-  - Должен вызывать `mail_checker.process_mailbox()` и `notifier.notify_delays()` по расписанию, не вмешиваясь в структуру данных.
+  - Имеет CLI `python -m project_package.project.notifier`, который запускается по расписанию.
 
 ## Потоки данных
 1. **Создание заявки (UI → БД)**
@@ -67,5 +67,6 @@
 
 ## Как использовать документ
 - Перед добавлением нового обмена данными убедитесь, что используете существующие структуры (`dict` с полями, перечисленными выше, или `ContractorMessage`).
+- Для регулярной обработки используйте CLI комманд `python -m project_package.project.mail_checker` и `python -m project_package.project.notifier`, подключённые к cron/Task Scheduler.
 - Если поток данных отклоняется от описанных сценариев, сначала обновите этот документ, затем вносите изменения в код.
 - При появлении новых сущностей (например, комментарии к уведомлениям) добавьте раздел в **Основные сущности** и опишите, какие модули их создают и потребляют.
