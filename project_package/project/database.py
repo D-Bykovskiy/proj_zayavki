@@ -249,6 +249,56 @@ def update_comment(
 
 
 
+
+
+def backdate_request(
+    request_number: str,
+    minutes: int,
+    position_number: Optional[str] = None,
+) -> bool:
+    """Move request timestamps back by the specified number of minutes."""
+    delta_expr = f'-{int(minutes)} minutes'
+    parameters: List[Any] = [delta_expr, delta_expr, request_number]
+    where_clause = 'request_number = ?'
+
+    if position_number is not None:
+        where_clause += ' AND position_number = ?'
+        parameters.append(position_number)
+
+    sql = (
+        f"UPDATE requests SET status_updated_at = datetime(status_updated_at, ?), "
+        f"created_at = datetime(created_at, ?) WHERE {where_clause}"
+    )
+
+    try:
+        with _connect() as conn:
+            cursor = conn.execute(sql, parameters)
+            updated = cursor.rowcount > 0
+    except sqlite3.Error as exc:
+        LOGGER.exception(
+            'Failed to backdate request %s%s: %s',
+            request_number,
+            f'/{position_number}' if position_number else '',
+            exc,
+        )
+        raise
+
+    if updated:
+        LOGGER.info(
+            'Backdated request %s%s by %s minutes',
+            request_number,
+            f'/{position_number}' if position_number else '',
+            minutes,
+        )
+    else:
+        LOGGER.warning(
+            'No request found for %s%s when attempting backdate',
+            request_number,
+            f'/{position_number}' if position_number else '',
+        )
+    return updated
+
+
 def get_delayed_requests(minutes: int = 60) -> List[Dict[str, Any]]:
     """?????????? ?????? ??? ?????????? ??????? ?????? ?????????? ???????."""
     query = (
@@ -295,6 +345,7 @@ def get_requests(limit: Optional[int] = None) -> List[Dict[str, Any]]:
 
 
 __all__ = [
+    "backdate_request",
     "DEFAULT_STATUS",
     "ROBOT_AUTHOR",
     "add_request",

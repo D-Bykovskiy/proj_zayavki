@@ -92,5 +92,13 @@
 ### Как подключаются пользователи
 - Сотрудники открывают веб-интерфейс в браузере и работают с заявками через формы и таблицы.
 - Telegram-бот отправляет уведомления в общий чат; достаточно добавить туда нужных людей.
-- Администратор следит за журналами (`/var/log/omis-*.log` или Task Scheduler History) и перезапускает сервисы при сбоях.
+- Администратор следит за журналами (`/var/log/omis-*.log` или Task Scheduler History) и перезапускает сервисы при сбоях.\n\n## Как работает runner.py
+- project_package/runner.py объединяет запуск mail_checker и 
+otifier одной командой python -m project_package.runner.
+- Опции --fake-mail, --dry-run, --minutes, --skip-mail, --skip-notifier помогают моделировать разные ситуации.
+- Эту команду можно использовать в cron/systemd/Task Scheduler, а также для ручной проверки цепочки.
 
+## Сценарии (scenario_runner.py)
+- python -m project_package.scenario_runner --scenario NAME выполняет заранее подготовленную последовательность шагов.
+- Сценарии описываются в ops/testing/scenarios.json (JSON-формат).
+- Доступна команда --list для просмотра доступных сценариев и --file для указания альтернативного набора.

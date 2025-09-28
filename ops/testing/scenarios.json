@@ -1,0 +1,48 @@
+{
+  "basic_sequence": [
+    {
+      "action": "add_request",
+      "params": {
+        "request_number": "77",
+        "position_number": "11",
+        "comment": "scenario test",
+        "comment_author": "MAX",
+        "status": "заявка принята",
+        "backdate_minutes": 90
+      }
+    },
+    {
+      "action": "mail_fake",
+      "params": {
+        "use_fake": true
+      }
+    },
+    {
+      "action": "notify",
+      "params": {
+        "minutes": 60,
+        "dry_run": true
+      }
+    }
+  ],
+  "runner_fake": [
+    {
+      "action": "add_request",
+      "params": {
+        "request_number": "900",
+        "position_number": "1",
+        "comment": "auto runner",
+        "comment_author": "Robot",
+        "backdate_minutes": 120
+      }
+    },
+    {
+      "action": "runner",
+      "params": {
+        "fake_mail": true,
+        "dry_run": true,
+        "minutes": 30
+      }
+    }
+  ]
+}

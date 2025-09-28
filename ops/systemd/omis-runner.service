@@ -1,0 +1,17 @@
+﻿[Unit]
+Description=OMIS batch tasks (mail checker + notifier)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/omis
+WorkingDirectory=${OMIS_ROOT}
+ExecStart=${OMIS_PYTHON} -m project_package.runner
+
+# Uncomment and edit the following lines to run under a dedicated user
+#User=omis
+#Group=omis
+
+[Install]
+WantedBy=multi-user.target

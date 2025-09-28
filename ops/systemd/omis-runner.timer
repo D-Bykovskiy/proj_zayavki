@@ -1,0 +1,10 @@
+﻿[Unit]
+Description=Run OMIS batch tasks every 10 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10min
+Unit=omis-runner.service
+
+[Install]
+WantedBy=timers.target
