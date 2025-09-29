@@ -102,3 +102,79 @@ otifier одной командой python -m project_package.runner.
 - python -m project_package.scenario_runner --scenario NAME выполняет заранее подготовленную последовательность шагов.
 - Сценарии описываются в ops/testing/scenarios.json (JSON-формат).
 - Доступна команда --list для просмотра доступных сценариев и --file для указания альтернативного набора.
+
+## Подключение почты Outlook
+
+1. Установите зависимость `exchangelib` в активном виртуальном окружении:
+
+   ```bash
+   pip install exchangelib
+   ```
+
+2. Настройте переменные окружения, которые использует модуль `mail_checker`:
+   - `OMIS_OUTLOOK_EMAIL` — рабочий адрес почтового ящика.
+   - `OMIS_OUTLOOK_CLIENT_ID` — идентификатор зарегистрированного Azure-приложения.
+   - `OMIS_OUTLOOK_CLIENT_SECRET` — секрет клиента из Azure.
+   - `OMIS_OUTLOOK_TENANT_ID` — идентификатор вашего тенанта Microsoft 365.
+   - `OMIS_OUTLOOK_FOLDER` *(опционально)* — путь к вложенной папке (через `/`, например `Inbox/Contracts`).
+   - `OMIS_OUTLOOK_LOOKBACK_MINUTES` *(опционально)* — окно синхронизации в минутах, по умолчанию 1440.
+   - `OMIS_OUTLOOK_MAX_MESSAGES` *(опционально)* — ограничение на количество писем за проход (по умолчанию 50).
+
+3. Для тестового запуска почтового парсера выполните:
+
+   ```bash
+   python -m project_package.project.mail_checker --log-level DEBUG
+   ```
+
+   Уберите флаг `--fake`, чтобы использовать реальный Outlook. В режиме отладки журнал покажет выбранную папку и результаты обработки.
+
+4. Если параметры не заданы или `exchangelib` не установлен, скрипт автоматически использует подготовленные тестовые письма, чтобы не блокировать локальную разработку.
+
+## Быстрый запуск сервера (виртуального и боевого)
+
+Модуль `project_package/project/server_setup.py` генерирует пошаговый план подготовки сервера. Скрипт не выполняет команды сам, а печатает их списком, чтобы оператор мог прогнать их вручную или встроить в Ansible/SSH-скрипт.
+
+1. Сгенерируйте план для тестовой ВМ:
+
+   ```bash
+   python -m project_package.project.server_setup virtual --no-nginx --extra-pip gunicorn
+   ```
+
+   В вывод попадут команды для установки Python, клонирования репозитория и запуска `mail_checker` в режиме `--fake`. Конфигурация Nginx отключена флагом `--no-nginx`, что удобно для локальных песочниц.
+
+2. Для боевого сервера (c Nginx и системным сервисом) выполните:
+
+   ```bash
+   python -m project_package.project.server_setup production --service-name omis-prod --extra-package postgresql-client
+   ```
+
+   Скрипт предложит:
+   - обновить пакеты и поставить `nginx`, `pipx`, Python нужной версии;
+   - создать системного пользователя `omis` и каталог `/opt/omis`;
+   - настроить виртуальное окружение и установить зависимости (`flask`, `requests`, `python-dotenv`, `exchangelib` + дополнительные пакеты);
+   - сгенерировать Unit-файл systemd и конфиг Nginx (прокси на 5000 порт);
+   - выполнить базовые проверки (`systemctl status`, `journalctl`, `curl`).
+
+3. Все пути настраиваются ключами CLI:
+   - `--project-dir` — куда клонировать репозиторий (по умолчанию `/opt/omis`).
+   - `--service-user` — системный пользователь для сервиса.
+   - `--python-version` — версия Python, которую следует поставить (формат `3.11`, `3.12`...).
+   - `--extra-package` / `--extra-pip` — дополнительный список пакетов APT и pip.
+
+4. План удобно переносить в Ansible:
+
+   ```yaml
+   - name: Prepare OMIS
+     hosts: omis
+     tasks:
+       - name: Run generated shell snippet
+         ansible.builtin.shell: >
+           sudo apt-get update && sudo apt-get install -y python3.11 python3.11-venv git pipx nginx
+           # команды продолжаются...
+   ```
+
+5. Логика генерации плана:
+   - В тестовом (`virtual`) профиле завершающий шаг запускает `mail_checker` c `--fake`, чтобы проверить окружение без подключений к Outlook.
+   - В боевом (`production`/`real`/`baremetal`) профиле выполняется «настоящий» прогон `mail_checker` в обычном режиме, после чего сервис фиксируется через systemd.
+
+Все ключевые комментарии и шаблоны unit-файлов находятся в `server_setup.py`, так что сценарий легко расширяется под kube/helm или дополнительные службы.
