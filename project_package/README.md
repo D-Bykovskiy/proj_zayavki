@@ -83,3 +83,8 @@
 - Если нужно временно пропустить интеграцию с почтой или уведомления, используйте `python -m project_package.runner --skip-mail` или `--skip-notifier`.
 
 
+## Настройка источника писем Outlook
+- Значение по умолчанию (`auto`) пробует сначала OAuth2 через `exchangelib`, затем локальный Outlook через COM. Если оба способа недоступны, письма не подхватываются: проверьте переменные `OMIS_OUTLOOK_*`.
+- Чтобы жестко выбрать механизм, укажите `OMIS_OUTLOOK_BACKEND` (`oauth`, `com` или `fake`) или передайте флаг `--backend` у `project_package.project.mail_checker` / `--mail-backend` у `project_package.runner`.
+- COM-режим работает только на Windows с установленным Outlook и зависит от пакета `pywin32`. Дополнительно используются переменные `OMIS_OUTLOOK_FOLDER`, `OMIS_OUTLOOK_LOOKBACK_MINUTES` и `OMIS_OUTLOOK_MAX_MESSAGES`.
+- Для тестов оставьте `--fake` или `--fake-mail`: они полностью переключают работу на встроенные письма и не затрагивают боевую базу.

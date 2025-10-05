@@ -12,6 +12,7 @@ LOGGER = logging.getLogger(__name__)
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Запускает обработку почты и проверку задержек подрядчика."""
+
     parser = argparse.ArgumentParser(
         description=(
             "Выполняет проектные задачи OMIS: сначала обновляет статусы по почте,"
@@ -32,6 +33,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--fake-mail",
         action="store_true",
         help="использовать тестовые письма (аналог --fake для mail_checker)",
+    )
+    parser.add_argument(
+        "--mail-backend",
+        choices=[
+            mail_checker.BACKEND_AUTO,
+            mail_checker.BACKEND_OAUTH,
+            mail_checker.BACKEND_COM,
+            mail_checker.BACKEND_FAKE,
+        ],
+        help="принудительно выбрать источник писем (иначе auto или переменная окружения)",
     )
     parser.add_argument(
         "--minutes",
@@ -56,7 +67,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if not args.skip_mail:
         LOGGER.info("Запускаем обработку почты подрядчика")
-        results = mail_checker.process_mailbox(use_fake=args.fake_mail)
+        results = mail_checker.process_mailbox(
+            use_fake=args.fake_mail,
+            backend=args.mail_backend,
+        )
         if results:
             for line in results:
                 LOGGER.info("MAIL: %s", line)

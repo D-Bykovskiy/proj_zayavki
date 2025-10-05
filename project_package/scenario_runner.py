@@ -98,9 +98,12 @@ def _execute_add_request(params: Dict[str, Any]) -> str:
 
 def _execute_mail_fake(params: Dict[str, Any]) -> str:
     use_fake = bool(params.get("use_fake", True))
-    results = mail_checker.process_mailbox(use_fake=use_fake)
+    backend = params.get("backend")
+    backend_name = str(backend) if backend is not None else None
+    results = mail_checker.process_mailbox(use_fake=use_fake, backend=backend_name)
     if not results:
-        return "Mail checker: no messages processed"
+        label = backend_name or ("fake" if use_fake else "auto")
+        return f"Mail checker: no messages processed (backend={label})"
     for line in results:
         LOGGER.info("MAIL: %s", line)
     return f"Mail checker processed {len(results)} message(s)"
@@ -125,6 +128,9 @@ def _execute_runner(params: Dict[str, Any]) -> str:
         argv.append("--dry-run")
     if "minutes" in params:
         argv.extend(["--minutes", str(params["minutes"])])
+    mail_backend = params.get("mail_backend")
+    if mail_backend:
+        argv.extend(["--mail-backend", str(mail_backend)])
     if params.get("skip_mail"):
         argv.append("--skip-mail")
     if params.get("skip_notifier"):
